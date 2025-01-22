@@ -1,8 +1,10 @@
 package standard_merkle_tree
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"strings"
 	"testing"
 )
 
@@ -82,6 +84,98 @@ func TestSMTOf(t *testing.T) {
 		strProof = append(strProof, hexutil.Encode(v))
 	}
 	fmt.Println("02 proof: ", strProof)
+}
+
+func TestSMTOfWithBytes32(t *testing.T) {
+	b32Hex := strings.Repeat("1", 64)
+
+	t.Run("error: SMTOf use bytes for bytes32", func(t *testing.T) {
+		leaf1 := []interface{}{
+			SolAddress("0x1111111111111111111111111111111111111111"),
+			SolBytes(b32Hex),
+		}
+
+		leaf2 := []interface{}{
+			SolAddress("0x2222222222222222222222222222222222222222"),
+			SolBytes(b32Hex),
+		}
+
+		leaves := [][]interface{}{
+			leaf1,
+			leaf2,
+		}
+
+		_, err := Of(
+			leaves,
+			[]string{
+				SOL_ADDRESS,
+				SOL_BYTES32,
+			})
+
+		if err == nil {
+			t.Fatal("Of should return error")
+		}
+
+		if err.Error() != "abi: cannot use slice as type array as argument" {
+			t.Fatalf("Of should return expected error: %s", err.Error())
+		}
+	})
+
+	t.Run("SMTOf use bytes 32 for bytes32", func(t *testing.T) {
+		blockHash, _ := hex.DecodeString(b32Hex)
+		var b32 [32]byte
+		copy(b32[:], blockHash)
+
+		leaf1 := []interface{}{
+			SolAddress("0x1111111111111111111111111111111111111111"),
+			b32,
+		}
+
+		leaf2 := []interface{}{
+			SolAddress("0x2222222222222222222222222222222222222222"),
+			b32,
+		}
+
+		leaves := [][]interface{}{
+			leaf1,
+			leaf2,
+		}
+
+		tree, err := Of(
+			leaves,
+			[]string{
+				SOL_ADDRESS,
+				SOL_BYTES32,
+			})
+
+		if err != nil {
+			t.Fatal("Of ERR", err)
+		}
+
+		dump, err := tree.TreeMarshal()
+		if err != nil {
+			t.Fatal("TreeMarshal ERR", err)
+		}
+		fmt.Println("TreeMarshal: ", string(dump))
+
+		loadTree, err := Load(dump)
+		if err != nil {
+			t.Fatal("Load ERR", err)
+		}
+
+		root := hexutil.Encode(loadTree.GetRoot())
+		fmt.Println("Merkle Root: ", root)
+
+		proof, err := loadTree.GetProof(leaf1)
+		strProof := make([]string, len(proof))
+		if err != nil {
+			fmt.Println("GetProof ERR", err)
+		}
+		for _, v := range proof {
+			strProof = append(strProof, hexutil.Encode(v))
+		}
+		fmt.Println("02 proof: ", strProof)
+	})
 }
 
 func TestSMTVerify(t *testing.T) {
